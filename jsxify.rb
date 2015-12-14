@@ -26,11 +26,32 @@ class JSXify
     when :pre_dedent
       @out.last << '})' if @indents.last =~ /classnames$/ && @out.last !~ /\}\)$/
     when :dedent
-      tag = line.match(/<(\w+)/)
-      @out << (' ' * count(line)) + '</' + tag[1] + '>' if tag
+      if (tag = line.match(/<(\w+)/))
+        @out << (' ' * count(line)) + '</' + tag[1] + '>'
+      elsif line.match(/{$/)
+        @out << (' ' * count(line)) + "},\n"
+      end
     when :line
       line.sub!(/React\.DOM\.(\w+)/, '<\1>')
-      line.sub!(/@(\w+)/, 'this.\1')
+      line.sub!(/(\s+)([A-Z]\w+)$/, '\1<\2>') # most likely a component
+      line.sub!(/> \{\},/, '>')
+      line.gsub!(/@(\w+)/, 'this.\1')
+      if @indents.last.to_s =~ /[^=]>$/ # inside a tag
+        if line =~ /^\s+'.+'$|\s+".+"$/ # literal text body
+          line.sub!(/^(\s+)'(.+)'$/, '\1\2')
+          line.sub!(/^(\s+)"(.+)"$/, '\1\2')
+        elsif line =~ /^\s+this\./ # probably a js expression body
+          line.sub!(/^(\s+)(this\..+)$/, '\1{\2}')
+        end
+      end
+      line.sub!(/^(\s+)"(.+)"$/, '\1\2')
+      line.sub!(/for (\w+), (\w+) in (.+)$/, '\3.map((\1, \2) => {') # for thing, index in things
+      line.sub!(/for (\w+) in ([^\s]+)$/, '\2.map((\1) => {') # for thing in things
+      line.sub!(/: ->$/, '() {')
+      line.sub!(/: \(([^\)]+)\)\s*->$/, '(\1) {')
+      line.sub!(/"([^"]+)"/) do
+        '`' + $1.gsub(/#\{(.+?)\}/, '${\1}') + '`'
+      end
       if @indents.last =~ /classnames$/ && line =~ /: /
         @out.last << ', ' unless @out.last =~ /\(\{$/
         @out.last << line.strip
@@ -43,8 +64,9 @@ class JSXify
   def phase2(op, line)
     case op
     when :line
-      if @indents.last =~ /<\w+>/ && (m = line.match(/(\w+): (.+)/))
-        fail 'tag not last!' if @out.last !~ />$/
+      # TODO: go back and find these!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+      # if @indents.last =~ /<\w+>/ && (m = line.match(/(\w+): (.+)/))
+      if @indents.last =~ /<\w+>/ && (m = line.match(/^\s+(\w+): (.+)/)) && @out.last =~ />$/
         value = m[2]
         value = "{#{value}}" unless value =~ /\A'.*'\z/
         @out.last.sub!(/>$/, " #{m[1]}=#{value}>")
@@ -92,6 +114,9 @@ class JSXify
   end
 end
 
-coffee = File.read(ARGV.first)
-
+if (arg = ARGV.first)
+  coffee = File.read(ARGV.first)
+else
+  coffee = STDIN.read
+end
 puts JSXify.new(coffee.split(/\n/)).go.join("\n")
