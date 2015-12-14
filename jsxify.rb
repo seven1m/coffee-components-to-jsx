@@ -9,6 +9,7 @@ class JSXify
 
   def go
     walk(:phase1)
+    walk(:phase2)
     @code
   end
 
@@ -29,9 +30,24 @@ class JSXify
       @out << (' ' * count(line)) + '</' + tag[1] + '>' if tag
     when :line
       line.sub!(/React\.DOM\.(\w+)/, '<\1>')
+      line.sub!(/@(\w+)/, 'this.\1')
       if @indents.last =~ /classnames$/ && line =~ /: /
         @out.last << ', ' unless @out.last =~ /\(\{$/
         @out.last << line.strip
+      else
+        @out << line
+      end
+    end
+  end
+
+  def phase2(op, line)
+    case op
+    when :line
+      if @indents.last =~ /<\w+>/ && (m = line.match(/(\w+): (.+)/))
+        fail 'tag not last!' if @out.last !~ />$/
+        value = m[2]
+        value = "{#{value}}" unless value =~ /\A'.*'\z/
+        @out.last.sub!(/>$/, " #{m[1]}=#{value}>")
       else
         @out << line
       end
@@ -47,8 +63,6 @@ class JSXify
     @indents = []
     @indent = 0
     @code.each do |line|
-      p @indents
-      p line
       if line =~ /^\s*$/
         @out << line
         next
@@ -57,14 +71,12 @@ class JSXify
       @indent = count(line)
       if @indent > @last_indent
         @indents << @out.last.dup
-        if send(walker, :indent, line)
+        if send(walker, :indent, line) != false
           send(walker, :line, line)
         else
           @indents.pop # not real
         end
       elsif @indent < @last_indent
-        puts
-        puts 'dedenting'
         send(walker, :pre_dedent, line)
         loop do
           top = @indents.pop
