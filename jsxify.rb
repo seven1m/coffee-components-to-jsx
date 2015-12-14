@@ -64,8 +64,6 @@ class JSXify
   def phase2(op, line)
     case op
     when :line
-      # TODO: go back and find these!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-      # if @indents.last =~ /<\w+>/ && (m = line.match(/(\w+): (.+)/))
       if @indents.last =~ /<\w+>/ && (m = line.match(/^\s+(\w+): (.+)/)) && @out.last =~ />$/
         value = m[2]
         value = "{#{value}}" unless value =~ /\A'.*'\z/
