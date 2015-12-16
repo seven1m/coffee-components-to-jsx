@@ -51,8 +51,9 @@ class JSXify
       line.sub!(/"([^"]*#\{[^"]*)"/) do
         '`' + $1.gsub(/#\{(.+?)\}/, '${\1}') + '`'                   # string interpolation
       end
-      if line =~ /\s+<[\w\.]+> \{\s*\w+: /                           # one-line tag and props
+      if line =~ /\s+<[\w\.]+> \{?\s*\w+: /                          # one-line tag and props
         line.gsub!(/(\w+): (['"`])(.+?)\2,?/, '\1=\2\3\2')           # string props
+        line.gsub!(/(['"])([\w\-]+)\1: (['"`])(.+?)\3,?/, '\2=\3\4\3') # quoted key
         line.gsub!(/(\w+): ([^ ,]+),?/, '\1={\2}')                   # js expression props
       end
       if @indents.last =~ /classnames$/ && line =~ /: /
